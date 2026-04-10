@@ -154,6 +154,7 @@ table.standings tr:last-child td { border-bottom: none; }
       <div class="actions">
         <button class="btn btn-primary btn-sm" id="btnSave" onclick="saveAllScores(this)">💾 保存</button>
         <button class="btn btn-sm" onclick="loadAll()">🔄 再読込</button>
+        <button class="btn btn-sm" style="color:#a32d2d;border-color:#f5c1c1" onclick="clearAllScores(this)">🗑 クリア</button>
       </div>
       <div class="info-note">各セットの得点を入力 → 勝敗・セット数・得失点差を自動計算。第3セットは使用しない場合は空欄のままでOKです。</div>
       <div class="grid-2">
@@ -227,8 +228,9 @@ table.standings tr:last-child td { border-bottom: none; }
       <div class="card" id="scoreInputCard">
         <div class="block-header" style="margin-bottom:12px">スコア入力</div>
         <div id="scoreInputArea"></div>
-        <div style="margin-top:12px">
+        <div style="margin-top:12px;display:flex;gap:8px;">
           <button class="btn btn-primary btn-sm" id="btnSaveTournament" onclick="saveTournament(this)">💾 保存</button>
+          <button class="btn btn-sm" style="color:#a32d2d;border-color:#f5c1c1" onclick="clearTournamentScores(this)">🗑 クリア</button>
         </div>
       </div>
     </div>
@@ -745,7 +747,23 @@ function svgConnectors(fromCount, toCount){
   return lines.join('');
 }
 
-async function saveTournament(btn){
+async function clearAllScores(btn){
+  if(isViewMode)return;
+  if(!confirm('全ブロックのスコアをクリアしますか？')) return;
+  scores={};
+  if(dbConnected) await sbSet('scores',scores);
+  renderAllMatches();
+  btn.textContent='クリア済み ✓';setTimeout(()=>btn.textContent='🗑 クリア',1500);
+}
+
+async function clearTournamentScores(btn){
+  if(isViewMode)return;
+  if(!confirm('トーナメントのスコアをクリアしますか？')) return;
+  tournamentScores={};
+  if(dbConnected) await sbSet('tournament_scores',tournamentScores);
+  renderTournament();
+  btn.textContent='クリア済み ✓';setTimeout(()=>btn.textContent='🗑 クリア',1500);
+}
   if(isViewMode)return;
   if(dbConnected)await sbSet('tournament_scores',tournamentScores);
   btn.textContent='保存済み ✓';setTimeout(()=>{btn.textContent='💾 保存';},1500);
