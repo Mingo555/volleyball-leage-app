@@ -1,268 +1,3 @@
-
-リーグ表を集計するアプリを作りたい。11チーム参加
-データはsupabaseに保存。入力キーワードはkiku
-Aブロック4チームで2チームと対戦で4試合　Aコート １－２，３－４，１－３，２－４
-Bブロック4チームで2チームと対戦で4試合    Bコート 5-6,7-8,5-7,6-8
-Cブロック3チーム 2チームと対戦 3試合 Cコート 9-10,9-11,10-11
-各ブロックの勝敗、セット数、得失点差で順位を決定
-A,Bブロック1,2,3位、Cブロック1,2位の8チームで決勝トーナメントを行う
-
-9:17
-まず、フロントエンドデザインのスキルを確認してから作成します。
-
-
-Reading frontend design skill
-Reading frontend design skill
-では、Supabaseを使ったリーグ表集計アプリを作成します。
-
-
-
-アプリが完成しました。使い方と初期設定をご案内します。
-
-ログイン：パスワード kiku でログインします。
-
-Supabase設定（初回のみ）：
-
-「設定」タブでSupabase URLとAnon Keyを入力する前に、SupabaseのSQL Editorで以下のテーブルを作成してください。
-
-sql
-CREATE TABLE league_data (
-  key text PRIMARY KEY,
-  value jsonb
-);
-その後、設定タブにURL・Anon Keyを貼り付けて「設定を保存して接続」を押すと接続確認し、以降のデータが自動保存されます。
-
-機能一覧
-
-スコア入力タブ：Aコート（試合1-2, 3-4, 1-3, 2-4）、Bコート（5-6, 7-8, 5-7, 6-8）、Cコート（9-10, 9-11, 10-11）の得点を入力して「保存」
-順位表タブ：勝敗→セット差→得失点差で自動集計。A・C上位2位、B上位3位に「進出」バッジ
-決勝トーナメントタブ：8チームのブラケットが自動生成、スコア入力で勝者が反映される
-設定タブ：チーム名の変更（1〜11チームすべて）とSupabase接続設定
-テーブル出来てるけど、接続失敗になる。
-
-9:26
-Supabase接続のデバッグをしてみましょう。接続失敗の原因を詳しく確認できるよう改善します。
-
-
-
-診断ツールを作りました。SupabaseのURLとAnon Keyを入力して「診断スタート」を押すと、どのステップで失敗しているか具体的に表示されます。
-
-よくある原因として、RLS（Row Level Security）が有効なのにポリシーが未設定というケースが最も多いです。もし診断で「書き込み権限なし」と出たら、Supabase の SQL Editor でこちらを実行してください。
-
-sql
-ALTER TABLE league_data ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "allow all" ON league_data
-  FOR ALL USING (true) WITH CHECK (true);
-診断結果を教えてもらえれば、さらに対応します！
-
-公開可能なキーじゃないの？
-
-9:29
-おっしゃる通りです！SupabaseのAnon Key（匿名キー）は公開しても問題ない設計になっています。
-
-Anon Key → フロントエンドに埋め込んでOK。GitHubに公開しても大丈夫
-Service Role Key → これは絶対に公開NG（全権限あり）
-ただし、Anon Keyを使う場合はRLSポリシーでアクセス制御するのがSupabaseの想定する使い方です。
-
-今回のアプリはパスワード（kiku）でログインしているとはいえ、それはフロントエンドだけの制御なので、Anon Key＋RLSなしだと誰でもAPIを直叩きできてしまいます。
-
-なので、アプリにAnon Keyを直接埋め込む形にして、RLSポリシーも設定すれば一番スマートです。
-
-sql
--- RLS有効化
-ALTER TABLE league_data ENABLE ROW LEVEL SECURITY;
-
--- 読み書きすべて許可（Anon Keyでアクセス可能）
-CREATE POLICY "allow all" ON league_data
-  FOR ALL USING (true) WITH CHECK (true);
-SupabaseのURLとAnon Keyをアプリに最初から埋め込んだ形で作り直しましょうか？その場合、URLとAnon Keyを教えていただければすぐ対応します。
-
-https://ftxfgztnhzvzffscsgan.supabase.co
-sb_publishable_coz8P8UTczQFs66LFg9r-A_ulAgq9jy
-
-9:31
-ありがとうございます！そのキーを埋め込んで、設定不要ですぐ使えるバージョンに作り直します。
-
-
-
-URLとキーを直接埋め込みました。ログイン後すぐに接続を試みます。
-
-もし「エラー 401」や「接続失敗」が出る場合は、SupabaseのSQL EditorでRLSポリシーの追加が必要です。
-
-sql
-alter table league_data enable row level security;
-
-create policy "allow all" on league_data
-  for all using (true) with check (true);
-接続状態はどう表示されますか？
-
-接続失敗: Failed to fetch
-
-9:33
-Failed to fetch はCORSエラーが原因の可能性が高いです。SupabaseのAnon Keyの形式が通常と違う（sb_publishable_で始まる）ので、ヘッダーの渡し方を確認してみます。
-
-
-
-①〜⑤を順番に押して、結果を教えてください。
-
-あと一点確認ですが、このキー sb_publishable_... はSupabaseのどの画面から取得しましたか？
-
-通常のAnon Keyは eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9... というJWT形式で始まります。sb_publishable_ という形式は見慣れない形式なので、Settings → API → anon public に表示されているキーを使うと確実です。
-
-https://supabase.com/dashboard/project/ftxfgztnhzvzffscsgan/settings/api-keys
-のキー
-
-9:35
-そのページから正しいAnon Keyが取得できます。sb_publishable_形式は新しいSupabaseの「Publishable key」で、従来のeyJ...形式のAnon Keyとは別物です。
-
-Settings → API Keys ページで、anon public と書かれた eyJhbGci... で始まるキーをコピーして教えてください。
-
-そのページはこんな表示になっているはずです：
-
-Name	Key
-anon public	eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-service_role	eyJhbGci...（絶対に共有しないでください）
-anon public のキーをここに貼っていただければ、すぐ埋め込んで動作確認します！
-
-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0eGZnenRuaHp2emZmc2NzZ2FuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjExNzcsImV4cCI6MjA5MTE5NzE3N30.vPL7jpEBQ1wjom0UX2m7LmQmHDZbCvbc7AWRBHxuPjI
-
-これか
-
-9:35
-はい、それが正しいAnon Keyです！埋め込んで作り直します。
-
-
-
-正しいAnon Keyに差し替えました。ログイン後に「接続済み」と表示されるか確認してください。
-
-もし「エラー 4xx」が出る場合は、SupabaseのSQL EditorでRLSポリシーがまだ未設定の可能性があります。
-
-sql
-alter table league_data enable row level security;
-
-create policy "allow all" on league_data
-  for all using (true) with check (true);
-Error: Failed to run sql query: ERROR: 42710: policy "allow all" for table "league_data" already exists
-だけど接続失敗: Failed to fetch
-
-9:38
-ポリシーは既に作成済みですね。Failed to fetch はCORSではなくSupabaseのURL形式の問題かもしれません。少し確認させてください。
-
-
-
-①〜④を全部押して、結果を教えてください。
-
-一つ確認ですが、ブラウザのコンソール（F12 → Consoleタブ） にどんなエラーが出ていますか？「CORS」や「net::ERR_」などのメッセージがあれば教えてください。Supabaseのプロジェクトが**Paused（一時停止）**になっている可能性もあります。ダッシュボードでプロジェクトのステータスを確認してみてください。
-
-VM70:21 Connecting to 'https://ftxfgztnhzvzffscsgan.supabase.co/rest/v1/' violates the following Content Security Policy directive: "connect-src 'self' https://esm.sh https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://unpkg.com". The action has been blocked.
-doFetch @ VM70:21
-t1 @ VM70:36
-onclick @ mcp_apps?connect-src=https%3A%2F%2Fesm.sh+https%3A%2F%2Fcdnjs.cloudflare.com+https%3A%2F%2Fcdn.jsdelivr.net+https%3A%2F%2Funpkg.com&resource-src=https%3A%2F%2Fesm.sh+https%3A%2F%2Fcdnjs.cloudflare.com+https%3A%2F%2Fcdn.jsdelivr.net+https%3A%2F%2Funpkg.com+https%3A%2F%2Fassets.claude.ai&dev=true:1Understand this error
-VM70:21 Fetch API cannot load https://ftxfgztnhzvzffscsgan.supabase.co/rest/v1/. Refused to connect because it violates the document's Content Security Policy.
-
-もっと表示
-9:39
-原因が分かりました。Claude.aiのアーティファクト内からSupabaseへの直接通信がCSPでブロックされています。 これはClaude.aiのセキュリティポリシーで、外部APIへの接続が制限されているためです。
-
-解決策は2つあります。
-
-① スタンドアロンHTMLファイルとして使う（おすすめ） アプリをHTMLファイルで作成してダウンロードし、ブラウザで直接開けばCSP制限なしで動作します。
-
-② Anthropic APIを経由する（Claude in Claude方式） CSPで許可されているapi.anthropic.com経由でデータを中継する方法ですが、Supabaseとの相性が悪いです。
-
-①のHTMLファイル方式で作りますか？ダウンロードしてブラウザで開くだけで、Supabaseとの接続も問題なく動作します。
-
-はい
-
-9:39
-HTMLファイルを作成します。
-
-
-ファイルを表示しました, ファイルを作成しました, ファイルを読み取りました
-ファイルを表示しました, ファイルを作成しました, ファイルを読み取りました
-ダウンロードできます。使い方はシンプルです。
-
-ファイルをダウンロードしてブラウザで開く
-パスワード kiku でログイン
-「接続済み」と表示されればOK
-もしまだ接続失敗が出る場合は、SupabaseのSQL Editorで以下を実行してください。
-
-sql
-alter table league_data enable row level security;
-create policy "allow all" on league_data for all using (true) with check (true);
-（ポリシーが既にあるエラーが出る場合はスキップ）
-
-
-League
-コード · HTML 
-試合前には順位表の順序空欄で進出部分も確定までは進出がでるとおかしいので終了までは確定は出さない。
-
-スコア入力のところでセットの結果も入力できるようにしないとセット数と得失点差が出ない。
-
-入力はできないが、1234で閲覧可能モードもつけたい。
-
-9:54
-なるほど、3点まとめて修正します。
-
-順位表 → 全試合完了まで「進出」バッジを非表示
-スコア入力 → セット数と得点も入力できるように（勝敗＋セット＋得失点）
-閲覧モード → パスワード 1234 でログインすると編集不可の閲覧専用
-
-ファイルを作成しました, コマンドを実行しました, ファイルを読み取りました
-ファイルを作成しました, コマンドを実行しました, ファイルを読み取りました
-3点すべて対応しました。
-
-変更内容まとめ
-
-順位表 → ブロック内の全試合が入力完了するまで「試合中」バッジを表示。全試合完了後に初めて「進出」「—」が確定表示されます
-スコア入力 → 各試合で「勝敗（ラジオボタン）」「セット数（取得-失）」「得点合計（得-失）」を個別入力できるようになりました。セット数と得失点差はこのデータから自動集計されます
-閲覧モード → パスワード 1234 でログインすると全入力が読み取り専用になり、保存ボタンも無効化されます。画面上部に「閲覧モード」バッジが表示されます
-
-League
-コード · HTML 
-スコア入力のところ、3セットマッチで点数を入力する形式にし、得失点差は自動で計算してほしい
-
-15:51
-3セットマッチ形式に変更します。各セットの点数を入力すれば勝敗・セット数・得失点差を自動計算する形にします。
-
-
-2個のファイルを作成しました, 2個のコマンドを実行しました, ファイルを読み取りました
-2個のファイルを作成しました, 2個のコマンドを実行しました, ファイルを読み取りました
-更新しました。スコア入力の変更点です。
-
-各試合カードに第1・第2・第3セットの得点欄が並んでいます。両チームの点数を入力すると、そのセットの勝ったほうが緑・負けたほうが赤に色付きます。入力と同時に下段の「得点合計」「セット数」「得失点差」が自動で更新され、右上のピルに勝敗結果が表示されます。第3セットは使わない場合は空欄のままで大丈夫です。
-
-
-League
-コード · HTML 
-点数入力欄の幅がせまい。
-2桁は入力表示できるようにしたい。
-順位表のところもチーム名もう少し幅狭くして、データの部分を広げたい
-
-設定欄のDBの設定画面は非表示で
-
-16:04
-
-5個のファイルを編集しました, コマンドを実行しました, ファイルを読み取りました
-5個のファイルを編集しました, コマンドを実行しました, ファイルを読み取りました
-3点修正しました。
-
-点数入力欄 → 56pxに拡張、2桁が余裕で表示されます
-順位表 → チーム名列を72pxに絞り、W/L/セット/得失点の列を広げました
-設定画面のDB設定 → 非表示にしました（URLとKeyは内部的に保持されています）
-
-League
-コード · HTML 
-
-Claudeが応答したときに通知を受け取りますか？
-
-
-
-Claude は AI のため、誤りを含む可能性があります。回答内容は必ずご確認ください。
-League · HTML
-コピー
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -296,7 +31,7 @@ input[readonly] { background: #f0f0ee; color: #999; cursor: default; }
 .card { background: #fff; border: 1px solid #e0e0dc; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
 .block-header { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
 .court-label { font-size: 10px; color: #aaa; padding: 1px 6px; border: 1px solid #e0e0dc; border-radius: 4px; font-weight: 400; text-transform: none; letter-spacing: 0; }
- 
+
 /* 試合ブロック */
 .match-block { border: 1px solid #ebebeb; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
 .match-block:last-child { margin-bottom: 0; }
@@ -307,7 +42,7 @@ input[readonly] { background: #f0f0ee; color: #999; cursor: default; }
 .res-left  { background: #eaf3de; color: #3b6d11; }
 .res-right { background: #fdecea; color: #a32d2d; }
 .res-draw  { background: #f1efe8; color: #888; }
- 
+
 .set-table { width: 100%; border-collapse: collapse; }
 .set-table th { font-size: 10px; color: #aaa; font-weight: 500; padding: 2px 4px; text-align: center; border-bottom: 1px solid #f0f0ec; }
 .set-table th.team-th { text-align: left; font-size: 12px; color: #555; font-weight: 600; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -323,7 +58,7 @@ input[readonly] { background: #f0f0ee; color: #999; cursor: default; }
 .sep-cell { color: #ddd; font-size: 12px; width: 12px; }
 .total-row td { border-top: 1px solid #f0f0ec; padding-top: 6px; font-size: 12px; color: #555; font-weight: 600; }
 .sw-row td { font-size: 11px; color: #999; }
- 
+
 .actions { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
 .btn { padding: 7px 16px; border: 1px solid #ddd; border-radius: 8px; background: #fff; color: #1a1a1a; font-size: 13px; cursor: pointer; }
 .btn:hover { background: #f5f5f3; }
@@ -361,7 +96,7 @@ table.standings tr:last-child td { border-bottom: none; }
 </head>
 <body>
 <div class="app">
- 
+
   <div class="login-wrap" id="loginPage">
     <div class="login-title">リーグ管理システム</div>
     <div class="login-sub">パスワードを入力してください</div>
@@ -370,7 +105,7 @@ table.standings tr:last-child td { border-bottom: none; }
     <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="doLogin()">ログイン</button>
     <div style="font-size:11px;color:#bbb;margin-top:12px">管理: kiku　閲覧: 1234</div>
   </div>
- 
+
   <div id="mainApp" style="display:none">
     <div class="header">
       <div>
@@ -382,14 +117,14 @@ table.standings tr:last-child td { border-bottom: none; }
         <span id="dbMsg">接続中...</span>
       </div>
     </div>
- 
+
     <div class="tabs">
       <button class="tab active" onclick="showTab('scores',this)">スコア入力</button>
       <button class="tab" onclick="showTab('standings',this)">順位表</button>
       <button class="tab" onclick="showTab('tournament',this)">決勝トーナメント</button>
       <button class="tab" id="settingsTab" onclick="showTab('settings',this)">設定</button>
     </div>
- 
+
     <div id="tab-scores" class="section active">
       <div class="actions">
         <button class="btn btn-primary btn-sm" id="btnSave" onclick="saveAllScores(this)">💾 保存</button>
@@ -415,7 +150,7 @@ table.standings tr:last-child td { border-bottom: none; }
         </div>
       </div>
     </div>
- 
+
     <div id="tab-standings" class="section">
       <div class="actions">
         <button class="btn btn-sm" onclick="renderStandings()">🔄 更新</button>
@@ -454,7 +189,7 @@ table.standings tr:last-child td { border-bottom: none; }
         </div>
       </div>
     </div>
- 
+
     <div id="tab-tournament" class="section">
       <div class="card">
         <div class="block-header" style="margin-bottom:8px">決勝進出チーム（8チーム）</div>
@@ -468,7 +203,7 @@ table.standings tr:last-child td { border-bottom: none; }
         </div>
       </div>
     </div>
- 
+
     <div id="tab-settings" class="section">
       <div class="card">
         <div class="block-header" style="margin-bottom:12px">チーム名設定</div>
@@ -492,24 +227,24 @@ table.standings tr:last-child td { border-bottom: none; }
     </div>
   </div>
 </div>
- 
+
 <script>
 const DEFAULT_URL = 'https://ftxfgztnhzvzffscsgan.supabase.co';
 const DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0eGZnenRuaHp2emZmc2NzZ2FuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjExNzcsImV4cCI6MjA5MTE5NzE3N30.vPL7jpEBQ1wjom0UX2m7LmQmHDZbCvbc7AWRBHxuPjI';
 const PW_ADMIN = 'kiku', PW_VIEW = '1234';
 let SB_URL = localStorage.getItem('sb_url') || DEFAULT_URL;
 let SB_KEY  = localStorage.getItem('sb_key')  || DEFAULT_KEY;
- 
+
 const BLOCKS = {
   A: { teams:[1,2,3,4],  matches:[[1,2],[3,4],[1,3],[2,4]] },
   B: { teams:[5,6,7,8],  matches:[[5,6],[7,8],[5,7],[6,8]] },
   C: { teams:[9,10,11],  matches:[[9,10],[9,11],[10,11]]   }
 };
- 
+
 let teamNames = {}; for(let i=1;i<=11;i++) teamNames[i]='チーム'+i;
 // scores[key].s = [[a0,b0],[a1,b1],[a2,b2]]  null=未入力
 let scores = {}, tournamentScores = {}, dbConnected = false, isViewMode = false;
- 
+
 /* ── ログイン ── */
 function doLogin(){
   const pw=document.getElementById('pwInput').value;
@@ -526,7 +261,7 @@ function startApp(){
   }
   init();
 }
- 
+
 /* ── タブ ── */
 function showTab(name,btn){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -536,7 +271,7 @@ function showTab(name,btn){
   if(name==='standings') renderStandings();
   if(name==='tournament') renderTournament();
 }
- 
+
 /* ── Supabase ── */
 function setDbStatus(state,msg){
   document.getElementById('dbDot').className='status-dot '+(state==='ok'?'dot-ok':state==='err'?'dot-err':'dot-loading');
@@ -557,7 +292,7 @@ async function sbSet(key,value){
   if(isViewMode)return;
   await sbFetch('/rest/v1/league_data',{method:'POST',headers:{Prefer:'resolution=merge-duplicates'},body:JSON.stringify({key,value})});
 }
- 
+
 async function init(){
   setDbStatus('loading','接続中...');
   document.getElementById('cfgUrl').value=SB_URL;
@@ -594,7 +329,7 @@ function saveConfig(){
   dbConnected=false;
   init().then(()=>document.getElementById('cfgMsg').textContent=dbConnected?'接続成功！':'接続失敗。URLとKeyを確認してください。');
 }
- 
+
 /* ── チーム名 ── */
 function renderTeamNameInputs(){
   const el=document.getElementById('teamNameInputs');if(!el)return;
@@ -609,7 +344,7 @@ async function saveTeamNames(btn){
   if(dbConnected)await sbSet('team_names',{names:teamNames});
   btn.textContent='保存済み ✓';setTimeout(()=>btn.textContent='チーム名を保存',1500);
 }
- 
+
 /* ── スコアヘルパー ── */
 // sets: [[a,b]|null, ...] 3要素
 function calcMatch(sets){
@@ -631,7 +366,7 @@ function getSets(key){
     return[Number(r[0]),r[1]===null||r[1]===''?null:Number(r[1])];
   });
 }
- 
+
 /* ── 試合描画 ── */
 function renderAllMatches(){
   ['A','B','C'].forEach(b=>{
@@ -639,20 +374,20 @@ function renderAllMatches(){
     el.innerHTML=BLOCKS[b].matches.map(m=>matchBlockHTML(b,m)).join('');
   });
 }
- 
+
 function matchBlockHTML(b,m){
   const key=`${b}_${m[0]}_${m[1]}`;
   const sets=getSets(key);
   const {sw0,sw1,pts0,pts1,win}=calcMatch(sets);
   const hasData=sets.some(s=>s[0]!==null);
   const ro=isViewMode?'readonly':'';
- 
+
   const pillCls=!hasData?'res-none':win==='left'?'res-left':win==='right'?'res-right':'res-draw';
   const pillTxt=!hasData?'未入力':win==='left'?`${teamNames[m[0]]}勝 ${sw0}-${sw1}`:win==='right'?`${teamNames[m[1]]}勝 ${sw1}-${sw0}`:`引分 ${sw0}-${sw1}`;
- 
+
   const th0cls=hasData&&win==='left'?'win':hasData&&win==='right'?'lose':'';
   const th1cls=hasData&&win==='right'?'win':hasData&&win==='left'?'lose':'';
- 
+
   const setRows=[0,1,2].map(i=>{
     const s=sets[i];
     const av=s[0]===null?'':s[0], bv=s[1]===null?'':s[1];
@@ -667,7 +402,7 @@ function matchBlockHTML(b,m){
       <td><input class="set-input ${clsB}" type="number" min="0" id="${key}_s${i}b" value="${bv}" placeholder="-" oninput="onSetInput('${key}')" ${ro}></td>
     </tr>`;
   }).join('');
- 
+
   return `<div class="match-block">
     <div class="match-header">
       <div class="match-names">${teamNames[m[0]]} vs ${teamNames[m[1]]}</div>
@@ -704,7 +439,7 @@ function matchBlockHTML(b,m){
     </table>
   </div>`;
 }
- 
+
 function onSetInput(key){
   const sets=[0,1,2].map(i=>{
     const a=document.getElementById(`${key}_s${i}a`)?.value;
@@ -713,10 +448,10 @@ function onSetInput(key){
   });
   if(!scores[key])scores[key]={};
   scores[key].s=sets;
- 
+
   const {sw0,sw1,pts0,pts1,win}=calcMatch(sets);
   const hasData=sets.some(s=>s[0]!==null);
- 
+
   // ピル更新
   const pill=document.getElementById(`pill_${key}`);
   if(pill){
@@ -726,13 +461,13 @@ function onSetInput(key){
     const bk=names[0], id0=Number(names[1]), id1=Number(names[2]);
     pill.textContent=!hasData?'未入力':win==='left'?`${teamNames[id0]}勝 ${sw0}-${sw1}`:win==='right'?`${teamNames[id1]}勝 ${sw1}-${sw0}`:`引分 ${sw0}-${sw1}`;
   }
- 
+
   // ヘッダー色
   const bk=key.split('_')[0], id0=Number(key.split('_')[1]), id1=Number(key.split('_')[2]);
   const th0=document.getElementById(`th0_${key}`),th1=document.getElementById(`th1_${key}`);
   if(th0){th0.className='team-th'+(hasData&&win==='left'?' win':hasData&&win==='right'?' lose':'');}
   if(th1){th1.className='team-th'+(hasData&&win==='right'?' win':hasData&&win==='left'?' lose':'');}
- 
+
   // 合計・セット・得失点差
   const g=id=>document.getElementById(id);
   if(g(`tot0_${key}`))g(`tot0_${key}`).textContent=hasData?pts0:'-';
@@ -741,7 +476,7 @@ function onSetInput(key){
   if(g(`sw1_${key}`))g(`sw1_${key}`).textContent=hasData?sw1:'-';
   if(g(`diff0_${key}`))g(`diff0_${key}`).textContent=hasData?(pts0-pts1>=0?'+':'')+(pts0-pts1):'-';
   if(g(`diff1_${key}`))g(`diff1_${key}`).textContent=hasData?(pts1-pts0>=0?'+':'')+(pts1-pts0):'-';
- 
+
   // セット色更新
   [0,1,2].forEach(i=>{
     const s=sets[i];
@@ -753,7 +488,7 @@ function onSetInput(key){
     ib.className='set-input'+(both?s[1]>s[0]?' s-won':s[1]<s[0]?' s-lost':'':'');
   });
 }
- 
+
 async function saveAllScores(btn){
   if(isViewMode)return;
   ['A','B','C'].forEach(b=>BLOCKS[b].matches.forEach(m=>{
@@ -768,7 +503,7 @@ async function saveAllScores(btn){
   if(dbConnected)await sbSet('scores',scores);
   btn.textContent='保存済み ✓';setTimeout(()=>btn.textContent='💾 保存',1500);
 }
- 
+
 /* ── 順位計算 ── */
 function isMatchComplete(key){
   const sets=getSets(key);
@@ -815,7 +550,7 @@ function renderStandings(){
     }).join('');
   });
 }
- 
+
 /* ── トーナメント ── */
 function getQualifiers(){
   if(!blockAllComplete('A')||!blockAllComplete('B')||!blockAllComplete('C'))return null;
@@ -868,7 +603,7 @@ function renderTournament(){
   const sfW1=getWinner('sf_1',sf1t0,sf1t1)||'SF2勝者';
   const fsc=tournamentScores['final']||{s1:'',s2:''};
   const fw=fsc.s1!==''&&fsc.s2!==''?(parseInt(fsc.s1)>parseInt(fsc.s2)?0:1):-1;
- 
+
   let html='<div class="grid-2"><div>';
   html+='<div class="round-label">準々決勝</div>';
   qfP.forEach((p,i)=>{html+=tMatchHTML(`qf_${i}`,seeds[p[0]].n,seeds[p[1]].n);});
@@ -893,4 +628,3 @@ async function saveTournament(btn){
 </script>
 </body>
 </html>
- 
