@@ -86,6 +86,31 @@ table.standings tr:last-child td { border-bottom: none; }
 .t-score-in { width: 36px; flex-shrink: 0; text-align: center; padding: 5px 2px; border: 1px solid #ddd; border-radius: 6px; background: #fafaf8; font-size: 13px; }
 .t-score-in:focus { outline: none; border-color: #888; }
 .round-label { font-size: 10px; color: #888; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* トーナメントブラケット */
+.bracket-wrap { overflow-x: auto; padding-bottom: 8px; }
+.bracket { display: flex; gap: 0; align-items: stretch; min-width: 640px; }
+.bracket-round { display: flex; flex-direction: column; flex: 1; }
+.bracket-round-label { font-size: 10px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; text-align: center; padding: 0 8px 10px; }
+.bracket-round-label.final-lbl { color: #b57415; }
+.bracket-matches { display: flex; flex-direction: column; flex: 1; justify-content: space-around; position: relative; }
+.bracket-match { display: flex; flex-direction: column; position: relative; margin: 0 8px; }
+.bracket-team { display: flex; align-items: center; justify-content: space-between; gap: 4px; background: #fafaf8; border: 1px solid #e0e0dc; border-radius: 6px; padding: 6px 8px; font-size: 12px; min-height: 32px; cursor: default; transition: background 0.1s; }
+.bracket-team.winner { background: #eaf3de; border-color: #b8d98b; font-weight: 600; color: #3b6d11; }
+.bracket-team.tbd { color: #ccc; font-style: italic; }
+.bracket-score { font-size: 13px; font-weight: 700; color: #555; min-width: 18px; text-align: right; flex-shrink: 0; }
+.bracket-score.win-score { color: #3b6d11; }
+.bracket-score.lose-score { color: #bbb; }
+.bracket-sep { height: 6px; }
+.bracket-connector { position: absolute; right: -8px; top: 0; bottom: 0; width: 8px; pointer-events: none; }
+.score-inputs-area { background: #fafaf8; border: 1px solid #e0e0dc; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+.score-inputs-title { font-size: 10px; color: #aaa; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+.score-input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+.score-input-row:last-child { margin-bottom: 0; }
+.score-input-team { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #555; }
+.score-input-num { width: 52px; text-align: center; padding: 5px 4px; border: 1px solid #ddd; border-radius: 6px; background: #fff; font-size: 14px; font-weight: 500; }
+.score-input-num:focus { outline: none; border-color: #888; }
+.score-input-num[readonly] { background: #f5f5f3; color: #999; border-color: #eee; }
 .tn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .tn-row { display: flex; align-items: center; gap: 6px; }
 .tn-label { font-size: 11px; color: #aaa; min-width: 52px; flex-shrink: 0; }
@@ -196,10 +221,14 @@ table.standings tr:last-child td { border-bottom: none; }
         <div class="qualifiers" id="qualifierList"></div>
       </div>
       <div class="card">
-        <div class="block-header">トーナメントブラケット</div>
-        <div id="bracketArea"></div>
+        <div class="block-header" style="margin-bottom:14px">トーナメント表</div>
+        <div class="bracket-wrap"><div class="bracket" id="bracketSVG"></div></div>
+      </div>
+      <div class="card" id="scoreInputCard">
+        <div class="block-header" style="margin-bottom:12px">スコア入力</div>
+        <div id="scoreInputArea"></div>
         <div style="margin-top:12px">
-          <button class="btn btn-primary btn-sm" id="btnSaveTournament" onclick="saveTournament(this)">💾 トーナメント結果を保存</button>
+          <button class="btn btn-primary btn-sm" id="btnSaveTournament" onclick="saveTournament(this)">💾 保存</button>
         </div>
       </div>
     </div>
@@ -563,67 +592,163 @@ function getWinner(key,t0,t1){
   const s1=parseInt(sc.s1),s2=parseInt(sc.s2);
   return isNaN(s1)||isNaN(s2)?null:s1>s2?t0:t1;
 }
+function getScore(key){ return tournamentScores[key]||{s1:'',s2:''}; }
 function onTS(key,idx,v){
   if(isViewMode)return;
   if(!tournamentScores[key])tournamentScores[key]={s1:'',s2:''};
   tournamentScores[key][idx===0?'s1':'s2']=v;
+  renderTournament();
 }
-function tMatchHTML(key,t0,t1){
-  const sc=tournamentScores[key]||{s1:'',s2:''};
-  const w=sc.s1!==''&&sc.s2!==''?(parseInt(sc.s1)>parseInt(sc.s2)?0:1):-1;
-  const ro=isViewMode?'readonly':'';
-  return `<div class="t-match">
-    <div class="t-team ${w===0?'winner':''}">${t0}</div>
-    <input class="t-score-in" type="number" min="0" value="${sc.s1}" placeholder="-" onchange="onTS('${key}',0,this.value)" ${ro}>
-    <span style="color:#ddd;font-size:11px;flex-shrink:0">-</span>
-    <input class="t-score-in" type="number" min="0" value="${sc.s2}" placeholder="-" onchange="onTS('${key}',1,this.value)" ${ro}>
-    <div class="t-team ${w===1?'winner':''}">${t1}</div>
+
+function teamBox(name,score,isWinner,isTbd){
+  const teamCls=isTbd?'tbd':isWinner?'winner':'';
+  const s=score===''||score===null?'':score;
+  const sWin=isWinner&&s!=='';
+  const sLose=!isWinner&&s!==''&&!isTbd;
+  const scoreCls=sWin?'win-score':sLose?'lose-score':'';
+  return `<div class="bracket-team ${teamCls}">
+    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${name}</span>
+    <span class="bracket-score ${scoreCls}">${s}</span>
   </div>`;
 }
+
+function bracketMatchHTML(key,t0,t1,label){
+  const sc=getScore(key);
+  const s1=sc.s1===''?null:parseInt(sc.s1);
+  const s2=sc.s2===''?null:parseInt(sc.s2);
+  const decided=s1!==null&&s2!==null&&!isNaN(s1)&&!isNaN(s2);
+  const w0=decided&&s1>s2, w1=decided&&s2>s1;
+  const t0tbd=!t0||t0.endsWith('勝者'), t1tbd=!t1||t1.endsWith('勝者');
+  return `<div class="bracket-match">
+    ${teamBox(t0||'未定',sc.s1,w0,t0tbd&&!decided)}
+    <div class="bracket-sep"></div>
+    ${teamBox(t1||'未定',sc.s2,w1,t1tbd&&!decided)}
+  </div>`;
+}
+
 function renderTournament(){
   const q=getQualifiers();
+  const ql=document.getElementById('qualifierList');
+
   if(!q){
-    document.getElementById('qualifierList').innerHTML='<div class="info-note">ブロックリーグの全試合完了後に決勝進出チームが確定します</div>';
-    document.getElementById('bracketArea').innerHTML='<div class="info-note">全ブロックの試合完了後にトーナメントが表示されます</div>';
+    ql.innerHTML='<div class="info-note">ブロックリーグの全試合完了後に決勝進出チームが確定します</div>';
+    document.getElementById('bracketSVG').innerHTML='<div class="info-note" style="min-width:0;width:100%">全ブロックの試合完了後にトーナメントが表示されます</div>';
+    document.getElementById('scoreInputCard').style.display='none';
     return;
   }
-  document.getElementById('qualifierList').innerHTML=Object.entries(q).map(([k,t])=>
+
+  ql.innerHTML=Object.entries(q).map(([k,t])=>
     `<div class="q-team"><div class="q-label">${k}</div><div class="q-name">${t?t.name:'未確定'}</div></div>`).join('');
-  const seeds=[
-    {n:q.A1?.name||'A1'},{n:q.B3?.name||'B3'},
-    {n:q.B1?.name||'B1'},{n:q.A3?.name||'A3'},
-    {n:q.C1?.name||'C1'},{n:q.A2?.name||'A2'},
-    {n:q.B2?.name||'B2'},{n:q.C2?.name||'C2'}
+
+  // シード: QF1=A1 vs B3, QF2=B1 vs A3, QF3=C1 vs A2, QF4=B2 vs C2
+  const s=[
+    q.A1?.name||'A1', q.B3?.name||'B3',
+    q.B1?.name||'B1', q.A3?.name||'A3',
+    q.C1?.name||'C1', q.A2?.name||'A2',
+    q.B2?.name||'B2', q.C2?.name||'C2'
   ];
-  const qfP=[[0,7],[1,6],[2,5],[3,4]];
-  const qfW=qfP.map((p,i)=>getWinner(`qf_${i}`,seeds[p[0]].n,seeds[p[1]].n));
-  const sf0t0=qfW[0]||'QF1勝者',sf0t1=qfW[1]||'QF2勝者';
-  const sf1t0=qfW[2]||'QF3勝者',sf1t1=qfW[3]||'QF4勝者';
+
+  const qfW=[0,1,2,3].map(i=>getWinner(`qf_${i}`,s[i*2],s[i*2+1]));
+  const sf0t0=qfW[0]||'QF1勝者', sf0t1=qfW[1]||'QF2勝者';
+  const sf1t0=qfW[2]||'QF3勝者', sf1t1=qfW[3]||'QF4勝者';
   const sfW0=getWinner('sf_0',sf0t0,sf0t1)||'SF1勝者';
   const sfW1=getWinner('sf_1',sf1t0,sf1t1)||'SF2勝者';
-  const fsc=tournamentScores['final']||{s1:'',s2:''};
-  const fw=fsc.s1!==''&&fsc.s2!==''?(parseInt(fsc.s1)>parseInt(fsc.s2)?0:1):-1;
+  const finW=getWinner('final',sfW0,sfW1);
 
-  let html='<div class="grid-2"><div>';
-  html+='<div class="round-label">準々決勝</div>';
-  qfP.forEach((p,i)=>{html+=tMatchHTML(`qf_${i}`,seeds[p[0]].n,seeds[p[1]].n);});
-  html+='</div><div>';
-  html+='<div class="round-label">準決勝</div>';
-  html+=tMatchHTML('sf_0',sf0t0,sf0t1);
-  html+=tMatchHTML('sf_1',sf1t0,sf1t1);
-  html+=`<div style="margin-top:14px;border-top:1px solid #f0f0ec;padding-top:14px">
-    <div class="round-label" style="color:#b57415">決勝</div>
-    ${tMatchHTML('final',sfW0,sfW1)}
-    ${fw>=0?`<div class="final-banner">🏆 優勝: ${fw===0?sfW0:sfW1}</div>`:''}
-  </div>`;
-  html+='</div></div>';
-  document.getElementById('bracketArea').innerHTML=html;
-  if(isViewMode)document.querySelectorAll('#bracketArea input').forEach(el=>el.readOnly=true);
+  // ブラケット描画（左から右）
+  const bracket=document.getElementById('bracketSVG');
+  bracket.innerHTML=`
+    <!-- 準々決勝 -->
+    <div class="bracket-round">
+      <div class="bracket-round-label">準々決勝</div>
+      <div class="bracket-matches" style="gap:10px">
+        ${bracketMatchHTML('qf_0',s[0],s[1])}
+        ${bracketMatchHTML('qf_1',s[2],s[3])}
+        ${bracketMatchHTML('qf_2',s[4],s[5])}
+        ${bracketMatchHTML('qf_3',s[6],s[7])}
+      </div>
+    </div>
+    <!-- コネクター線 QF→SF -->
+    <div style="display:flex;flex-direction:column;justify-content:space-around;width:20px;flex-shrink:0">
+      ${svgConnectors(4,2)}
+    </div>
+    <!-- 準決勝 -->
+    <div class="bracket-round">
+      <div class="bracket-round-label">準決勝</div>
+      <div class="bracket-matches" style="gap:10px">
+        ${bracketMatchHTML('sf_0',sf0t0,sf0t1)}
+        ${bracketMatchHTML('sf_1',sf1t0,sf1t1)}
+      </div>
+    </div>
+    <!-- コネクター線 SF→F -->
+    <div style="display:flex;flex-direction:column;justify-content:space-around;width:20px;flex-shrink:0">
+      ${svgConnectors(2,1)}
+    </div>
+    <!-- 決勝 -->
+    <div class="bracket-round">
+      <div class="bracket-round-label final-lbl">決勝</div>
+      <div class="bracket-matches">
+        ${bracketMatchHTML('final',sfW0,sfW1)}
+        ${finW?`<div style="margin-top:12px;padding:8px 10px;background:#eaf3de;border-radius:8px;font-size:12px;font-weight:600;color:#3b6d11;text-align:center">🏆 ${finW}</div>`:''}
+      </div>
+    </div>
+  `;
+
+  // スコア入力エリア
+  document.getElementById('scoreInputCard').style.display='block';
+  const ro=isViewMode?'readonly':'';
+  const rounds=[
+    {label:'準々決勝',matches:[
+      {key:'qf_0',t0:s[0],t1:s[1]},{key:'qf_1',t0:s[2],t1:s[3]},
+      {key:'qf_2',t0:s[4],t1:s[5]},{key:'qf_3',t0:s[6],t1:s[7]}
+    ]},
+    {label:'準決勝',matches:[
+      {key:'sf_0',t0:sf0t0,t1:sf0t1},{key:'sf_1',t0:sf1t0,t1:sf1t1}
+    ]},
+    {label:'決勝',matches:[
+      {key:'final',t0:sfW0,t1:sfW1}
+    ]}
+  ];
+
+  document.getElementById('scoreInputArea').innerHTML=rounds.map(r=>`
+    <div class="score-inputs-area">
+      <div class="score-inputs-title">${r.label}</div>
+      ${r.matches.map(m=>{
+        const sc=getScore(m.key);
+        return `<div class="score-input-row">
+          <span class="score-input-team">${m.t0}</span>
+          <input class="score-input-num" type="number" min="0" value="${sc.s1}" placeholder="-"
+            onchange="onTS('${m.key}',0,this.value)" ${ro}>
+          <span style="color:#ddd">-</span>
+          <input class="score-input-num" type="number" min="0" value="${sc.s2}" placeholder="-"
+            onchange="onTS('${m.key}',1,this.value)" ${ro}>
+          <span class="score-input-team" style="text-align:right">${m.t1}</span>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+
+  if(isViewMode){
+    document.querySelectorAll('#scoreInputArea input').forEach(el=>el.readOnly=true);
+    document.getElementById('btnSaveTournament').disabled=true;
+  }
 }
+
+function svgConnectors(fromCount, toCount){
+  // CSSだけでシンプルな線を表現
+  const lines=[];
+  for(let i=0;i<toCount;i++){
+    lines.push(`<svg width="20" height="80" style="display:block" viewBox="0 0 20 80" preserveAspectRatio="none">
+      <path d="M0,20 C10,20 10,40 20,40" stroke="#ddd" stroke-width="1.5" fill="none"/>
+      <path d="M0,60 C10,60 10,40 20,40" stroke="#ddd" stroke-width="1.5" fill="none"/>
+    </svg>`);
+  }
+  return lines.join('');
+}
+
 async function saveTournament(btn){
   if(isViewMode)return;
   if(dbConnected)await sbSet('tournament_scores',tournamentScores);
-  btn.textContent='保存済み ✓';setTimeout(()=>{btn.textContent='💾 トーナメント結果を保存';renderTournament();},1500);
+  btn.textContent='保存済み ✓';setTimeout(()=>{btn.textContent='💾 保存';},1500);
 }
 </script>
 </body>
