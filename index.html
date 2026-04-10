@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>リーグ管理システム</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f3; color: #1a1a1a; font-size: 14px; }
+.app { max-width: 900px; margin: 0 auto; padding: 1.5rem 1rem; }
+.login-wrap { max-width: 320px; margin: 5rem auto; background: #fff; border: 1px solid #e0e0dc; border-radius: 12px; padding: 2rem; text-align: center; }
+.login-title { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+.login-sub { font-size: 13px; color: #666; margin-bottom: 1.5rem; }
+input[type=password], input[type=text], input[type=number] { padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; background: #fafaf8; color: #1a1a1a; font-size: 13px; }
+input[type=password]:focus, input[type=text]:focus, input[type=number]:focus { outline: none; border-color: #888; }
+.error-msg { color: #a32d2d; font-size: 13px; margin-top: 6px; }
+.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 8px; }
+.header-title { font-size: 18px; font-weight: 600; }
+.header-sub { font-size: 12px; color: #888; }
+.status-bar { display: flex; align-items: center; gap: 6px; padding: 5px 10px; background: #fff; border: 1px solid #e0e0dc; border-radius: 8px; font-size: 12px; }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; }
+.dot-ok { background: #639922; } .dot-err { background: #e24b4a; } .dot-loading { background: #ba7517; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid #e0e0dc; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.tab { padding: 8px 16px; font-size: 13px; background: none; border: none; border-bottom: 2px solid transparent; cursor: pointer; color: #888; margin-bottom: -1px; }
+.tab.active { color: #1a1a1a; border-bottom-color: #1a1a1a; font-weight: 500; }
+.tab:hover:not(.active) { color: #1a1a1a; }
+.section { display: none; }
+.section.active { display: block; }
+.card { background: #fff; border: 1px solid #e0e0dc; border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+.block-header { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.court-label { font-size: 10px; color: #aaa; padding: 1px 6px; border: 1px solid #e0e0dc; border-radius: 4px; }
+.match-row { display: grid; grid-template-columns: 1fr 42px 14px 42px 1fr; gap: 6px; align-items: center; margin-bottom: 8px; }
+.match-team { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.match-team.left { text-align: right; }
+.match-team.right { text-align: left; }
+.match-vs { text-align: center; color: #ccc; font-size: 11px; }
+.score-input { width: 100%; text-align: center; padding: 5px 2px; border: 1px solid #ddd; border-radius: 6px; background: #fafaf8; font-size: 14px; font-weight: 500; }
+.score-input:focus { outline: none; border-color: #888; }
+.actions { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+.btn { padding: 7px 16px; border: 1px solid #ddd; border-radius: 8px; background: #fff; color: #1a1a1a; font-size: 13px; cursor: pointer; transition: background 0.1s; }
+.btn:hover { background: #f5f5f3; }
+.btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.btn-primary:hover { background: #333; }
+.btn-sm { padding: 5px 12px; font-size: 12px; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+@media (max-width: 620px) { .grid-2 { grid-template-columns: 1fr; } }
+table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+th { text-align: left; padding: 6px 8px; color: #888; font-weight: 500; border-bottom: 1px solid #f0f0ec; font-size: 11px; }
+td { padding: 8px 8px; border-bottom: 1px solid #f5f5f3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+tr:last-child td { border-bottom: none; }
+.badge { display: inline-block; padding: 2px 7px; border-radius: 6px; font-size: 11px; font-weight: 500; }
+.badge-qualify { background: #eaf3de; color: #3b6d11; }
+.badge-out { background: #f1efe8; color: #888; }
+.qualifiers { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; margin-bottom: 1rem; }
+.q-team { padding: 8px 10px; background: #fafaf8; border: 1px solid #e0e0dc; border-radius: 8px; }
+.q-label { font-size: 10px; color: #aaa; margin-bottom: 2px; }
+.q-name { font-size: 12px; font-weight: 500; }
+.t-match { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.t-team { flex: 1; padding: 6px 8px; border: 1px solid #e0e0dc; border-radius: 8px; font-size: 12px; background: #fafaf8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.t-team.winner { background: #eaf3de; border-color: #c0dd97; color: #3b6d11; font-weight: 500; }
+.t-score { width: 34px; flex-shrink: 0; }
+.round-label { font-size: 10px; color: #888; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+.tn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.tn-row { display: flex; align-items: center; gap: 6px; }
+.tn-label { font-size: 11px; color: #aaa; min-width: 52px; flex-shrink: 0; }
+.tn-input { flex: 1; width: 100%; padding: 5px 8px; }
+.final-banner { margin-top: 8px; padding: 8px 12px; background: #eaf3de; border-radius: 8px; font-size: 13px; color: #3b6d11; font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ログイン -->
+  <div class="login-wrap" id="loginPage">
+    <div class="login-title">リーグ管理システム</div>
+    <div class="login-sub">パスワードを入力してください</div>
+    <input type="password" id="pwInput" placeholder="パスワード" style="width:100%;margin-bottom:8px" onkeydown="if(event.key==='Enter')doLogin()" />
+    <div class="error-msg" id="pwErr"></div>
+    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="doLogin()">ログイン</button>
+  </div>
+
+  <!-- メインアプリ -->
+  <div id="mainApp" style="display:none">
+    <div class="header">
+      <div>
+        <div class="header-title">リーグ管理システム</div>
+        <div class="header-sub">11チーム 3ブロック制</div>
+      </div>
+      <div class="status-bar">
+        <div class="status-dot dot-loading" id="dbDot"></div>
+        <span id="dbMsg">接続中...</span>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('scores',this)">スコア入力</button>
+      <button class="tab" onclick="showTab('standings',this)">順位表</button>
+      <button class="tab" onclick="showTab('tournament',this)">決勝トーナメント</button>
+      <button class="tab" onclick="showTab('settings',this)">設定</button>
+    </div>
+
+    <!-- スコア入力 -->
+    <div id="tab-scores" class="section active">
+      <div class="actions">
+        <button class="btn btn-primary btn-sm" onclick="saveAllScores(this)">💾 保存</button>
+        <button class="btn btn-sm" onclick="loadAll()">🔄 再読込</button>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div class="card">
+            <div class="block-header">Aブロック <span class="court-label">Aコート</span></div>
+            <div id="matchesA"></div>
+          </div>
+          <div class="card">
+            <div class="block-header">Cブロック <span class="court-label">Cコート</span></div>
+            <div id="matchesC"></div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="block-header">Bブロック <span class="court-label">Bコート</span></div>
+            <div id="matchesB"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 順位表 -->
+    <div id="tab-standings" class="section">
+      <div class="actions">
+        <button class="btn btn-sm" onclick="renderStandings()">🔄 更新</button>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div class="card">
+            <div class="block-header">Aブロック <span style="font-size:10px;color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">上位2位が決勝進出</span></div>
+            <table><thead><tr><th style="width:28px">順</th><th>チーム</th><th style="width:24px">W</th><th style="width:24px">L</th><th style="width:52px">セット</th><th style="width:40px">得失</th><th style="width:48px"></th></tr></thead><tbody id="tbA"></tbody></table>
+          </div>
+          <div class="card">
+            <div class="block-header">Cブロック <span style="font-size:10px;color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">上位2位が決勝進出</span></div>
+            <table><thead><tr><th style="width:28px">順</th><th>チーム</th><th style="width:24px">W</th><th style="width:24px">L</th><th style="width:52px">セット</th><th style="width:40px">得失</th><th style="width:48px"></th></tr></thead><tbody id="tbC"></tbody></table>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="block-header">Bブロック <span style="font-size:10px;color:#aaa;font-weight:400;text-transform:none;letter-spacing:0">上位3位が決勝進出</span></div>
+            <table><thead><tr><th style="width:28px">順</th><th>チーム</th><th style="width:24px">W</th><th style="width:24px">L</th><th style="width:52px">セット</th><th style="width:40px">得失</th><th style="width:48px"></th></tr></thead><tbody id="tbB"></tbody></table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 決勝トーナメント -->
+    <div id="tab-tournament" class="section">
+      <div class="card">
+        <div class="block-header" style="margin-bottom:8px">決勝進出チーム（8チーム）</div>
+        <div class="qualifiers" id="qualifierList"></div>
+      </div>
+      <div class="card">
+        <div class="block-header">トーナメントブラケット</div>
+        <div id="bracketArea"></div>
+        <div style="margin-top:12px">
+          <button class="btn btn-primary btn-sm" onclick="saveTournament(this)">💾 トーナメント結果を保存</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 設定 -->
+    <div id="tab-settings" class="section">
+      <div class="card">
+        <div class="block-header" style="margin-bottom:12px">チーム名設定</div>
+        <div class="tn-grid" id="teamNameInputs"></div>
+        <div style="margin-top:12px">
+          <button class="btn btn-primary btn-sm" onclick="saveTeamNames(this)">チーム名を保存</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="block-header" style="margin-bottom:8px">Supabase設定</div>
+        <div style="font-size:12px;color:#888;margin-bottom:8px">変更する場合はここで再設定できます</div>
+        <div style="margin-bottom:6px">
+          <label style="font-size:11px;color:#aaa;display:block;margin-bottom:3px">URL</label>
+          <input type="text" id="cfgUrl" style="width:100%" placeholder="https://xxx.supabase.co" />
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:11px;color:#aaa;display:block;margin-bottom:3px">Anon Key</label>
+          <input type="text" id="cfgKey" style="width:100%" placeholder="eyJhbGci..." />
+        </div>
+        <button class="btn btn-sm" onclick="saveConfig()">保存して再接続</button>
+        <div id="cfgMsg" style="font-size:12px;color:#888;margin-top:6px"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULT_URL = 'https://ftxfgztnhzvzffscsgan.supabase.co';
+const DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ0eGZnenRuaHp2emZmc2NzZ2FuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MjExNzcsImV4cCI6MjA5MTE5NzE3N30.vPL7jpEBQ1wjom0UX2m7LmQmHDZbCvbc7AWRBHxuPjI';
+const PASSWORD = 'kiku';
+
+let SB_URL = localStorage.getItem('sb_url') || DEFAULT_URL;
+let SB_KEY  = localStorage.getItem('sb_key')  || DEFAULT_KEY;
+
+const BLOCKS = {
+  A: { teams:[1,2,3,4],   matches:[[1,2],[3,4],[1,3],[2,4]] },
+  B: { teams:[5,6,7,8],   matches:[[5,6],[7,8],[5,7],[6,8]] },
+  C: { teams:[9,10,11],   matches:[[9,10],[9,11],[10,11]]   }
+};
+
+let teamNames = {}; for(let i=1;i<=11;i++) teamNames[i]='チーム'+i;
+let scores = {}, tournamentScores = {}, dbConnected = false;
+
+/* ── ログイン ── */
+function doLogin() {
+  if(document.getElementById('pwInput').value === PASSWORD) {
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('mainApp').style.display = 'block';
+    init();
+  } else {
+    document.getElementById('pwErr').textContent = 'パスワードが違います';
+  }
+}
+
+/* ── タブ切替 ── */
+function showTab(name, btn) {
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='standings') renderStandings();
+  if(name==='tournament') renderTournament();
+}
+
+/* ── DB状態 ── */
+function setDbStatus(state, msg) {
+  const cls = state==='ok'?'dot-ok':state==='err'?'dot-err':'dot-loading';
+  document.getElementById('dbDot').className = 'status-dot '+cls;
+  document.getElementById('dbMsg').textContent = msg;
+  dbConnected = (state==='ok');
+}
+
+/* ── Supabase fetch ── */
+async function sbFetch(path, opts={}) {
+  const headers = { apikey:SB_KEY, Authorization:`Bearer ${SB_KEY}`, 'Content-Type':'application/json', ...opts.headers };
+  return fetch(SB_URL+path, {...opts, headers});
+}
+async function sbGet(key) {
+  const r = await sbFetch(`/rest/v1/league_data?key=eq.${key}&select=value`);
+  if(!r.ok) return null;
+  const d = await r.json();
+  return d.length>0 ? d[0].value : null;
+}
+async function sbSet(key, value) {
+  await sbFetch('/rest/v1/league_data', {
+    method:'POST',
+    headers:{ Prefer:'resolution=merge-duplicates' },
+    body:JSON.stringify({key, value})
+  });
+}
+
+/* ── 初期化 ── */
+async function init() {
+  setDbStatus('loading','接続中...');
+  document.getElementById('cfgUrl').value = SB_URL;
+  document.getElementById('cfgKey').value = SB_KEY;
+  try {
+    const r = await sbFetch('/rest/v1/league_data?select=key&limit=1');
+    if(r.ok) {
+      setDbStatus('ok','接続済み');
+      await loadAll();
+    } else {
+      setDbStatus('err',`エラー ${r.status}`);
+    }
+  } catch(e) {
+    setDbStatus('err','接続失敗: '+e.message);
+  }
+  renderTeamNameInputs();
+  renderAllMatches();
+}
+
+async function loadAll() {
+  try {
+    const [sc,tn,ts] = await Promise.all([sbGet('scores'),sbGet('team_names'),sbGet('tournament_scores')]);
+    if(sc) scores = sc;
+    if(tn && tn.names) teamNames = tn.names;
+    if(ts) tournamentScores = ts;
+    renderTeamNameInputs();
+    renderAllMatches();
+  } catch(e) { console.error(e); }
+}
+
+/* ── 設定保存 ── */
+function saveConfig() {
+  SB_URL = document.getElementById('cfgUrl').value.trim().replace(/\/$/,'');
+  SB_KEY  = document.getElementById('cfgKey').value.trim();
+  localStorage.setItem('sb_url', SB_URL);
+  localStorage.setItem('sb_key', SB_KEY);
+  document.getElementById('cfgMsg').textContent = '保存しました。再接続中...';
+  dbConnected = false;
+  init().then(()=>{
+    document.getElementById('cfgMsg').textContent = dbConnected ? '接続成功！' : '接続失敗。URLとKeyを確認してください。';
+  });
+}
+
+/* ── チーム名 ── */
+function renderTeamNameInputs() {
+  const el = document.getElementById('teamNameInputs'); if(!el) return;
+  const bl = i => i<=4?'A':i<=8?'B':'C';
+  el.innerHTML = Array.from({length:11},(_,i)=>i+1).map(i=>`
+    <div class="tn-row">
+      <span class="tn-label">${bl(i)} T${i}</span>
+      <input class="tn-input" type="text" id="tn${i}" value="${teamNames[i]||'チーム'+i}" />
+    </div>`).join('');
+}
+async function saveTeamNames(btn) {
+  for(let i=1;i<=11;i++){const e=document.getElementById('tn'+i);if(e)teamNames[i]=e.value||'チーム'+i;}
+  renderAllMatches();
+  if(dbConnected) await sbSet('team_names',{names:teamNames});
+  btn.textContent='保存済み ✓'; setTimeout(()=>btn.textContent='チーム名を保存',1500);
+}
+
+/* ── 試合描画 ── */
+function renderAllMatches() {
+  ['A','B','C'].forEach(b=>{
+    const el=document.getElementById('matches'+b); if(!el) return;
+    el.innerHTML=BLOCKS[b].matches.map(m=>{
+      const key=`${b}_${m[0]}_${m[1]}`, sc=scores[key]||{s1:'',s2:''};
+      return `<div class="match-row">
+        <div class="match-team left">${teamNames[m[0]]}</div>
+        <input class="score-input t-score" type="number" min="0" id="sc_${key}_1" value="${sc.s1}" placeholder="-" />
+        <div class="match-vs">-</div>
+        <input class="score-input t-score" type="number" min="0" id="sc_${key}_2" value="${sc.s2}" placeholder="-" />
+        <div class="match-team right">${teamNames[m[1]]}</div>
+      </div>`;
+    }).join('');
+  });
+}
+
+async function saveAllScores(btn) {
+  ['A','B','C'].forEach(b=>BLOCKS[b].matches.forEach(m=>{
+    const key=`${b}_${m[0]}_${m[1]}`;
+    scores[key]={
+      s1:document.getElementById('sc_'+key+'_1')?.value??'',
+      s2:document.getElementById('sc_'+key+'_2')?.value??''
+    };
+  }));
+  if(dbConnected) await sbSet('scores',scores);
+  btn.textContent='保存済み ✓'; setTimeout(()=>btn.textContent='💾 保存',1500);
+}
+
+/* ── 順位計算 ── */
+function calcStandings(block) {
+  const stats={};
+  BLOCKS[block].teams.forEach(t=>stats[t]={w:0,l:0,sw:0,sl:0,diff:0});
+  BLOCKS[block].matches.forEach(m=>{
+    const sc=scores[`${block}_${m[0]}_${m[1]}`];
+    if(!sc||sc.s1===''||sc.s2==='') return;
+    const s1=parseInt(sc.s1),s2=parseInt(sc.s2);
+    if(isNaN(s1)||isNaN(s2)) return;
+    stats[m[0]].diff+=s1-s2; stats[m[1]].diff+=s2-s1;
+    if(s1>s2){stats[m[0]].w++;stats[m[0]].sw++;stats[m[1]].l++;stats[m[1]].sl++;}
+    else if(s2>s1){stats[m[1]].w++;stats[m[1]].sw++;stats[m[0]].l++;stats[m[0]].sl++;}
+  });
+  return BLOCKS[block].teams
+    .map(t=>({id:t,name:teamNames[t],...stats[t]}))
+    .sort((a,b)=>b.w-a.w||(b.sw-b.sl)-(a.sw-a.sl)||b.diff-a.diff);
+}
+
+function renderStandings() {
+  const qualify={A:2,B:3,C:2};
+  ['A','B','C'].forEach(block=>{
+    const tb=document.getElementById('tb'+block); if(!tb) return;
+    tb.innerHTML=calcStandings(block).map((r,i)=>{
+      const q=i<qualify[block];
+      const diff=r.diff>=0?'+'+r.diff:''+r.diff;
+      const color=i===0?'#b57415':i===1?'#636363':i===2?'#8b5c2e':'inherit';
+      return `<tr>
+        <td style="color:${color};font-weight:${i<3?600:400}">${i+1}</td>
+        <td>${r.name}</td><td>${r.w}</td><td>${r.l}</td>
+        <td>${r.sw}-${r.sl}</td><td>${diff}</td>
+        <td><span class="badge ${q?'badge-qualify':'badge-out'}">${q?'進出':'—'}</span></td>
+      </tr>`;
+    }).join('');
+  });
+}
+
+/* ── トーナメント ── */
+function getQualifiers() {
+  const qA=calcStandings('A'),qB=calcStandings('B'),qC=calcStandings('C');
+  return {A1:qA[0],A2:qA[1],A3:qA[2],B1:qB[0],B2:qB[1],B3:qB[2],C1:qC[0],C2:qC[1]};
+}
+
+function getWinner(key,t0,t1) {
+  const sc=tournamentScores[key];
+  if(!sc||sc.s1===''||sc.s2==='') return null;
+  const s1=parseInt(sc.s1),s2=parseInt(sc.s2);
+  return isNaN(s1)||isNaN(s2)?null:s1>s2?t0:t1;
+}
+
+function onTS(key,idx,val) {
+  if(!tournamentScores[key]) tournamentScores[key]={s1:'',s2:''};
+  tournamentScores[key][idx===0?'s1':'s2']=val;
+}
+
+function matchHTML(key,t0,t1) {
+  const sc=tournamentScores[key]||{s1:'',s2:''};
+  const w=sc.s1!==''&&sc.s2!==''?(parseInt(sc.s1)>parseInt(sc.s2)?0:1):-1;
+  return `<div class="t-match">
+    <div class="t-team ${w===0?'winner':''}">${t0}</div>
+    <input class="score-input t-score" type="number" min="0" value="${sc.s1}" placeholder="-" onchange="onTS('${key}',0,this.value)" />
+    <span style="color:#ccc;font-size:11px;flex-shrink:0">-</span>
+    <input class="score-input t-score" type="number" min="0" value="${sc.s2}" placeholder="-" onchange="onTS('${key}',1,this.value)" />
+    <div class="t-team ${w===1?'winner':''}">${t1}</div>
+  </div>`;
+}
+
+function renderTournament() {
+  const q=getQualifiers();
+  document.getElementById('qualifierList').innerHTML=Object.entries(q).map(([k,t])=>
+    `<div class="q-team"><div class="q-label">${k}</div><div class="q-name">${t?t.name:'未確定'}</div></div>`).join('');
+
+  // シード順: A1 vs B3, B1 vs A3, C1 vs A2, B2 vs C2
+  const seeds=[
+    {k:'A1',n:q.A1?.name||'A1'},{k:'B3',n:q.B3?.name||'B3'},
+    {k:'B1',n:q.B1?.name||'B1'},{k:'A3',n:q.A3?.name||'A3'},
+    {k:'C1',n:q.C1?.name||'C1'},{k:'A2',n:q.A2?.name||'A2'},
+    {k:'B2',n:q.B2?.name||'B2'},{k:'C2',n:q.C2?.name||'C2'}
+  ];
+  const qfP=[[0,7],[1,6],[2,5],[3,4]];
+  const qfW=qfP.map((p,i)=>getWinner(`qf_${i}`,seeds[p[0]].n,seeds[p[1]].n));
+
+  const sf0t0=qfW[0]||'QF1勝者', sf0t1=qfW[1]||'QF2勝者';
+  const sf1t0=qfW[2]||'QF3勝者', sf1t1=qfW[3]||'QF4勝者';
+  const sfW0=getWinner('sf_0',sf0t0,sf0t1)||'SF1勝者';
+  const sfW1=getWinner('sf_1',sf1t0,sf1t1)||'SF2勝者';
+
+  const fsc=tournamentScores['final']||{s1:'',s2:''};
+  const fw=fsc.s1!==''&&fsc.s2!==''?(parseInt(fsc.s1)>parseInt(fsc.s2)?0:1):-1;
+
+  let html='<div class="grid-2"><div>';
+  html+='<div class="round-label">準々決勝</div>';
+  qfP.forEach((p,i)=>{ html+=matchHTML(`qf_${i}`,seeds[p[0]].n,seeds[p[1]].n); });
+  html+='</div><div>';
+  html+='<div class="round-label">準決勝</div>';
+  html+=matchHTML('sf_0',sf0t0,sf0t1);
+  html+=matchHTML('sf_1',sf1t0,sf1t1);
+  html+=`<div style="margin-top:14px;border-top:1px solid #f0f0ec;padding-top:14px">
+    <div class="round-label" style="color:#b57415">決勝</div>
+    ${matchHTML('final',sfW0,sfW1)}
+    ${fw>=0?`<div class="final-banner">🏆 優勝: ${fw===0?sfW0:sfW1}</div>`:''}
+  </div>`;
+  html+='</div></div>';
+  document.getElementById('bracketArea').innerHTML=html;
+}
+
+async function saveTournament(btn) {
+  if(dbConnected) await sbSet('tournament_scores',tournamentScores);
+  btn.textContent='保存済み ✓'; setTimeout(()=>{btn.textContent='💾 トーナメント結果を保存';renderTournament();},1500);
+}
+</script>
+</body>
+</html>
