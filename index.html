@@ -764,10 +764,19 @@ async function clearTournamentScores(btn){
   renderTournament();
   btn.textContent='クリア済み ✓';setTimeout(()=>btn.textContent='🗑 クリア',1500);
 }
+
+async function saveTournament(btn){
   if(isViewMode)return;
   if(dbConnected)await sbSet('tournament_scores',tournamentScores);
   btn.textContent='保存済み ✓';setTimeout(()=>{btn.textContent='💾 保存';},1500);
 }
+
+/* グローバル公開 */
+window.doLogin=doLogin; window.startApp=startApp; window.showTab=showTab;
+window.saveAllScores=saveAllScores; window.clearAllScores=clearAllScores;
+window.loadAll=loadAll; window.saveTeamNames=saveTeamNames; window.saveConfig=saveConfig;
+window.renderStandings=renderStandings; window.onSetInput=onSetInput;
+window.onTS=onTS; window.saveTournament=saveTournament; window.clearTournamentScores=clearTournamentScores;
 </script>
 </body>
 </html>
